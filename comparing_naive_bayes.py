@@ -1,37 +1,166 @@
+from __future__ import print_function
+
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.naive_bayes import BernoulliNB
-import numpy as np
-import matplotlib.pyplot as plt
 from sklearn.model_selection import learning_curve
 
-print(__doc__)
+import numpy as np
+import matplotlib.pyplot as plt
+import itertools
+import time
+
+import reuters_utilities
+
+
+# Most frequent topics/IDs found on "Information Retrieval Technology" and from McCallum-Nigan paper
+reuters_topics_list = [('earn', 1), ('acq', 2), ('money-fx', 3), ('grain', 4), ('crude', 5), ('trade', 6),
+                       ('interest', 7), ('ship', 8), ('wheat', 9), ('corn', 10)]
+
+
+def get_documents_batch(documents_iterator, content, topic_list):
+    data = [(content.format(**doc), check_topics(doc, topic_list))  # Makes a list of tuples (document text, topic id)
+            for doc in itertools.islice(documents_iterator, 21578)  # Splits documents, returning the first 21578 items
+            if check_topics(doc, topic_list)]  # Removes documents with False (which do not belong to any
+    # of the above topic)
+    if not len(data):  # In case there are no documents with the selected topics...
+        return np.asarray([], dtype=int), np.asarray([], dtype=int)  # ...it returns an empty list
+    x_test, topics = zip(*data)  # Makes two list out of a list of tuples. x_test contains the documents and y contains
+    # the topic which they belong to
+    return x_test, np.asarray(topics, dtype=int)
+
+
+def check_topics(doc, topic_list):  # Verifies if doc contains at least one of the chosen topics
+    for topic in topic_list:
+        if topic[0] in doc['topics']:
+            return topic[1]  # Since it checks topics by order, it will return the first (most probable?) #TODO
+    return False  # No topics of interest found from the given list
 
 
 def reuters():
-    print('Temporary placeholder.')
+    while True:
+        print("""
+How many categories would you like to consider? (From 2 to 10 categories)
+Please note that categories are chosen from the most frequent to the less frequent.
+        """)
+        input_value = int(raw_input())
+        if (input_value >= 2) and (input_value <= 10):
+            topic_list = reuters_topics_list[0:input_value]
+            break
+        else:
+            print('Unrecognised input.')
+
+    while True:
+        print("""
+Which parts of the documents would you like to consider?
+1 - Title and body
+2 - Body only
+        """)
+        input_value = int(raw_input())
+        if input_value == 1:
+            content = u'{title}\n\n{body}'
+            break
+        elif input_value == 2:
+            content = u'{body}'
+            break
+        else:
+            print('Unrecognised input.')
+
+    iterator = reuters_utilities.stream_reuters_documents()  # Iterator over parsed Reuters files
+    reuters_train, reuters_topics = get_documents_batch(iterator, content, topic_list)
+
+    plot_graph(reuters_train, reuters_topics)
 
 
 def twenty_newsgroups():
-    remove = ()  # TODO: remove header, footer and quotes or not?
-    twenty_train = fetch_20newsgroups(subset='train', shuffle=True, random_state=42, remove=remove)
+    while True:
+        print("""
+Which document categories would you like to use?
+1 - All categories
+2 - comp.*
+3 - rec.*
+4 - sci.*
+5 - talk.*
+        """)
+        input_value = int(raw_input())
+        if input_value == 1:
+            newsgroups_categories = ['alt.atheism', 'comp.graphics', 'comp.os.ms-windows.misc',
+                                     'comp.sys.ibm.pc.hardware', 'comp.sys.mac.hardware', 'comp.windows.x',
+                                     'misc.forsale', 'rec.autos', 'rec.motorcycles', 'rec.sport.baseball',
+                                     'rec.sport.hockey', 'sci.crypt', 'sci.electronics', 'sci.med', 'sci.space',
+                                     'soc.religion.christian', 'talk.politics.guns', 'talk.politics.mideast',
+                                     'talk.politics.misc', 'talk.religion.misc']
+            break
+        elif input_value == 2:
+            newsgroups_categories = ['comp.graphics', 'comp.os.ms-windows.misc', 'comp.sys.ibm.pc.hardware',
+                                     'comp.sys.mac.hardware', 'comp.windows.x']
+            break
+        elif input_value == 3:
+            newsgroups_categories = ['rec.autos', 'rec.motorcycles', 'rec.sport.baseball', 'rec.sport.hockey']
+            break
+        elif input_value == 4:
+            newsgroups_categories = ['sci.crypt', 'sci.electronics', 'sci.med', 'sci.space']
+            break
+        elif input_value == 5:
+            newsgroups_categories = ['talk.politics.guns', 'talk.politics.mideast', 'talk.politics.misc',
+                                     'talk.religion.misc']
+            break
+        else:
+            print('Unrecognised input.')
+
+    while True:
+        print("""
+Would you like to remove any tag?
+1 - Don't remove anything
+2 - Remove headers
+3 - Remove footers
+4 - Remove quotes
+5 - Remove headers, footers and quotes
+        """)
+        input_value = int(raw_input())
+        if input_value == 1:
+            remove_categories = ()
+            break
+        elif input_value == 2:
+            remove_categories = ('headers')
+            break
+        elif input_value == 3:
+            remove_categories = ('footers')
+            break
+        elif input_value == 4:
+            remove_categories = ('quotes')
+            break
+        elif input_value == 5:
+            remove_categories = ('headers', 'footers', 'quotes')
+            break
+        else:
+            print('Unrecognised input.')
+
+
+    twenty_train = fetch_20newsgroups(subset='train', shuffle=True, random_state=42, remove=remove_categories,
+                                      categories=newsgroups_categories)
+    # Won't remove anything since there's information in headers and footers too
     plot_graph(twenty_train.data, twenty_train.target)  # We pass documents first, then all categories they belong to
 
 
 def plot_graph(documents, categories):
-    x_train_countvect = CountVectorizer().fit_transform(documents)  # Learns a vocabulary dictionary and returns
-    # a term-document matrix
-    x_train_tfidf = TfidfTransformer().fit_transform(x_train_countvect)  # Now, word frequencies instead of occurrences
-    print('(N_samples, N_features_new): ', x_train_tfidf.shape, )  # (N_samples, N_features_new)
+    x_train_countvect = CountVectorizer().fit_transform(documents)  # Learns a vocabulary dictionary and returns a list
+    # of word occurrences
+    x_train_tfidf = TfidfTransformer().fit_transform(x_train_countvect)  # Since we need word frequencies instead of
+    # word occurrences
+    print('(N_samples, N_features): ', x_train_tfidf.shape, )
 
     dots, k_fold = plot_preparation()
 
-    # TODO: implement timer to compare performances?
-
+    start = time.time()
     plot_curve(MultinomialNB(), 'Multinomial Naive Bayes', x_train_tfidf, categories, k_fold, dots)
+    print('Multinomial Naive Bayes execution time: ' + str(time.time() - start) + 'seconds.')
+
+    start = time.time()
     plot_curve(BernoulliNB(), 'Bernoulli Naive Bayes', x_train_tfidf, categories, k_fold, dots)
+    print('Bernoulli Naive Bayes execution time: ' + str(time.time() - start) + 'seconds.')
 
     plt.show()
 
@@ -42,8 +171,8 @@ def plot_curve(estimator, title, X, y, k_fold, dots):
     plt.ylim(0.0, 1.0)
     plt.xlabel('Number of training examples')
     plt.ylabel('Score')
-    train_sizes, train_scores, test_scores = learning_curve(estimator, X, y, cv = k_fold,
-                                                            n_jobs=2, train_sizes=np.linspace(.1, 1.0, dots))
+    train_sizes, train_scores, test_scores = learning_curve(estimator, X, y, cv=k_fold, n_jobs=2,
+                                                            train_sizes=np.linspace(0.1, 1.0, dots))
     train_scores_mean = np.mean(train_scores, axis=1)  # NumPy method which computes arithmetic mean along the
     # specified axis
     train_scores_std = np.std(train_scores, axis=1)  # NumPy method which computes the standard deviation along the
@@ -53,14 +182,14 @@ def plot_curve(estimator, title, X, y, k_fold, dots):
     plt.grid()  # Matplotlib method which turns on the axes grid
 
     plt.fill_between(train_sizes, train_scores_mean - train_scores_std,
-      train_scores_mean + train_scores_std, alpha=0.1, color='r')  # Matplotlib method which makes filled polygons
-    # between two curves. Creates a PolyCollection and fills the region between the two points on the vertical axis
-    plt.fill_between(train_sizes, test_scores_mean - test_scores_std,
-                     test_scores_mean + test_scores_std, alpha=0.1, color='b')
+                     train_scores_mean + train_scores_std, alpha=0.1, color='r')  # Matplotlib method which makes filled
+    # polygons between two curves. Creates a PolyCollection, fills the region between two points on the vertical axis
+    plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std, alpha=0.1,
+                     color='b')
 
-    plt.plot(train_sizes, train_scores_mean, 'o-', color='r', label=('Training score'))  # Matplotlib method which plots
-    #  lines to the axes.
-    plt.plot(train_sizes, test_scores_mean, 'o-', color='b', label=('Cross-validation score'))
+    plt.plot(train_sizes, train_scores_mean, '.-', color='r', label='Training score')  # Matplotlib method which plots
+    # lines to the axes.
+    plt.plot(train_sizes, test_scores_mean, '.-', color='b', label='Cross-validation score')
 
     plt.legend(loc='best')  # Matplotlib which draws a legend associated with axes
     return plt
@@ -93,23 +222,23 @@ def plot_preparation():
     return dots, k_fold
 
 
-if __name__=='__main__':
-    print("""
-    Comparison between Multinomial Naive Bayes and Bernoulli Naive Bayes implementations.
-    Which dataset would you like to use for this comparison?
-    Type 1 for Reuters, 2 for 20newsgroups or 3 to exit this script.""")
+if __name__ == '__main__':
+    print_prompt = True
     while True:
-        #try:
-        i = int(raw_input())
-        if i is 1:
+        print("""
+Comparison between Multinomial Naive Bayes and Bernoulli Naive Bayes implementations.
+Which dataset would you like to use for this comparison?
+Type 1 for Reuters, 2 for 20newsgroups or 3 to exit this script.
+        """)
+
+        input_value = int(raw_input())
+        if input_value is 1:
             reuters()
             print('Reuters execution completed.')
-        elif i is 2:
+        elif input_value is 2:
             twenty_newsgroups()
             print('20newsgroups execution completed.')
-        elif i is 3:
+        elif input_value is 3:
             break
         else:
-            print('Unrecognised input. Please type 1 for Reuters, 2 for 20newsgroups or 3 to exit this script.')
-        #except ValueError:
-            #print('Please enter a numeric value. Type 1 for Reuters, 2 for 20newsgroups or 3 to exit this script.')
+            print('Unrecognised input.')
