@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
@@ -14,10 +12,13 @@ import time
 
 import reuters_utilities
 
+__author__ = 'Federico Tammaro'
+__email__ = 'federico.tammaro@stud.unifi.it'
 
-# Most frequent topics/IDs found on "Information Retrieval Technology" and from McCallum-Nigan paper
-reuters_topics_list = [('earn', 1), ('acq', 2), ('money-fx', 3), ('grain', 4), ('crude', 5), ('trade', 6),
-                       ('interest', 7), ('ship', 8), ('wheat', 9), ('corn', 10)]
+# Most frequent topics/IDs found on "Information Retrieval Technology" and from McCallum-Nigan paper, ordered from the
+# least frequent to the most frequent
+reuters_topics_list = [('corn', 10), ('wheat', 9), ('ship', 8), ('interest', 7), ('trade', 6), ('crude', 5),
+                       ('grain', 4), ('money-fx', 3), ('acq', 2), ('earn', 1)]
 
 
 def get_documents_batch(documents_iterator, content, topic_list):
@@ -35,23 +36,11 @@ def get_documents_batch(documents_iterator, content, topic_list):
 def check_topics(doc, topic_list):  # Verifies if doc contains at least one of the chosen topics
     for topic in topic_list:
         if topic[0] in doc['topics']:
-            return topic[1]  # Since it checks topics by order, it will return the first (most probable?) #TODO
+            return topic[1]  # Since it checks topics by order, it will return the first
     return False  # No topics of interest found from the given list
 
 
 def reuters():
-    while True:
-        print("""
-How many categories would you like to consider? (From 2 to 10 categories)
-Please note that categories are chosen from the most frequent to the less frequent.
-        """)
-        input_value = int(raw_input())
-        if (input_value >= 2) and (input_value <= 10):
-            topic_list = reuters_topics_list[0:input_value]
-            break
-        else:
-            print('Unrecognised input.')
-
     while True:
         print("""
 Which parts of the documents would you like to consider?
@@ -69,7 +58,7 @@ Which parts of the documents would you like to consider?
             print('Unrecognised input.')
 
     iterator = reuters_utilities.stream_reuters_documents()  # Iterator over parsed Reuters files
-    reuters_train, reuters_topics = get_documents_batch(iterator, content, topic_list)
+    reuters_train, reuters_topics = get_documents_batch(iterator, content, reuters_topics_list)
 
     plot_graph(reuters_train, reuters_topics)
 
@@ -121,27 +110,25 @@ Would you like to remove any tag?
         """)
         input_value = int(raw_input())
         if input_value == 1:
-            remove_categories = ()
+            remove_tags = ()
             break
         elif input_value == 2:
-            remove_categories = ('headers')
+            remove_tags = ('headers')
             break
         elif input_value == 3:
-            remove_categories = ('footers')
+            remove_tags = ('footers')
             break
         elif input_value == 4:
-            remove_categories = ('quotes')
+            remove_tags = ('quotes')
             break
         elif input_value == 5:
-            remove_categories = ('headers', 'footers', 'quotes')
+            remove_tags = ('headers', 'footers', 'quotes')
             break
         else:
             print('Unrecognised input.')
 
-
-    twenty_train = fetch_20newsgroups(subset='train', shuffle=True, random_state=42, remove=remove_categories,
+    twenty_train = fetch_20newsgroups(subset='train', shuffle=True, random_state=42, remove=remove_tags,
                                       categories=newsgroups_categories)
-    # Won't remove anything since there's information in headers and footers too
     plot_graph(twenty_train.data, twenty_train.target)  # We pass documents first, then all categories they belong to
 
 
@@ -156,11 +143,11 @@ def plot_graph(documents, categories):
 
     start = time.time()
     plot_curve(MultinomialNB(), 'Multinomial Naive Bayes', x_train_tfidf, categories, k_fold, dots)
-    print('Multinomial Naive Bayes execution time: ' + str(time.time() - start) + 'seconds.')
+    print('Multinomial Naive Bayes execution time: ' + str(round(time.time() - start, 5)) + ' seconds.')
 
     start = time.time()
     plot_curve(BernoulliNB(), 'Bernoulli Naive Bayes', x_train_tfidf, categories, k_fold, dots)
-    print('Bernoulli Naive Bayes execution time: ' + str(time.time() - start) + 'seconds.')
+    print('Bernoulli Naive Bayes execution time: ' + str(round(time.time() - start, 5)) + ' seconds.')
 
     plt.show()
 
@@ -171,28 +158,58 @@ def plot_curve(estimator, title, X, y, k_fold, dots):
     plt.ylim(0.0, 1.0)
     plt.xlabel('Number of training examples')
     plt.ylabel('Score')
+
     train_sizes, train_scores, test_scores = learning_curve(estimator, X, y, cv=k_fold, n_jobs=2,
                                                             train_sizes=np.linspace(0.1, 1.0, dots))
-    train_scores_mean = np.mean(train_scores, axis=1)  # NumPy method which computes arithmetic mean along the
-    # specified axis
-    train_scores_std = np.std(train_scores, axis=1)  # NumPy method which computes the standard deviation along the
-    # specified axis
+
+    train_scores_mean = np.mean(train_scores, axis=1)
+    train_scores_std = np.std(train_scores, axis=1)
+
+    print_results(estimator, train_scores_mean, train_scores_std, True)
+
     test_scores_mean = np.mean(test_scores, axis=1)
     test_scores_std = np.std(test_scores, axis=1)
+
+    print_results(estimator, test_scores_mean, test_scores_std, False)
+
     plt.grid()  # Matplotlib method which turns on the axes grid
 
     plt.fill_between(train_sizes, train_scores_mean - train_scores_std,
-                     train_scores_mean + train_scores_std, alpha=0.1, color='r')  # Matplotlib method which makes filled
-    # polygons between two curves. Creates a PolyCollection, fills the region between two points on the vertical axis
+                     train_scores_mean + train_scores_std, alpha=0.1, color='g')  # Matplotlib method which makes filled
+    # polygons between two curves
     plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std, alpha=0.1,
-                     color='b')
+                     color='m')
 
-    plt.plot(train_sizes, train_scores_mean, '.-', color='r', label='Training score')  # Matplotlib method which plots
+    plt.plot(train_sizes, train_scores_mean, '.-', color='g', label='Training score')  # Matplotlib method which plots
     # lines to the axes.
-    plt.plot(train_sizes, test_scores_mean, '.-', color='b', label='Cross-validation score')
+    plt.plot(train_sizes, test_scores_mean, '.-', color='m', label='Cross-validation score')
 
-    plt.legend(loc='best')  # Matplotlib which draws a legend associated with axes
+    plt.legend(loc='best')
     return plt
+
+
+def print_results(estimator, score, deviation, train):
+    title = ''
+
+    if type(estimator) is MultinomialNB:
+        title += 'Multinomial '
+    else:
+        title += 'Bernoulli '
+
+    if train:
+        title += 'train scores:'
+    else:
+        title += 'test scores:'
+
+    print(title)
+
+    print_string = ''
+    for index in range(0, len(score)):
+        print_string += str(round(score[index], 5))
+        print_string += ' +/- ' + str(round(deviation[index], 5))
+        print_string += '\n'
+
+    print(print_string)
 
 
 def plot_preparation():
@@ -212,8 +229,8 @@ def plot_preparation():
         try:
             k_fold = int(raw_input())
             if k_fold == "" or k_fold < 2:
-                print('Invalid k-fold number specified. Setting it by default to None.')
-                return dots, None  # This must be done to avoid setting the k-fold value to an illegal value (it must be
+                print('Invalid k-fold number specified. Setting it by default to 3.')
+                return dots, 3  # This must be done to avoid setting the k-fold value to an illegal value (it must be
                 # either None or >= 2
             break
         except ValueError:
