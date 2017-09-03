@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from sklearn.externals.six.moves import html_parser
 from sklearn.externals.six.moves import urllib
 from sklearn.datasets import get_data_home
