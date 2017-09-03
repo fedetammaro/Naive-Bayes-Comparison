@@ -12,13 +12,11 @@ import time
 
 import reuters_utilities
 
-__author__ = 'Federico Tammaro'
-__email__ = 'federico.tammaro@stud.unifi.it'
-
 # Most frequent topics/IDs found on "Information Retrieval Technology" and from McCallum-Nigan paper, ordered from the
 # least frequent to the most frequent
 reuters_topics_list = [('corn', 10), ('wheat', 9), ('ship', 8), ('interest', 7), ('trade', 6), ('crude', 5),
                        ('grain', 4), ('money-fx', 3), ('acq', 2), ('earn', 1)]
+topic_count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 
 def get_documents_batch(documents_iterator, content, topic_list):
@@ -36,6 +34,8 @@ def get_documents_batch(documents_iterator, content, topic_list):
 def check_topics(doc, topic_list):  # Verifies if doc contains at least one of the chosen topics
     for topic in topic_list:
         if topic[0] in doc['topics']:
+            topic_index = topic[1] - 1
+            topic_count[topic_index] += 1
             return topic[1]  # Since it checks topics by order, it will return the first
     return False  # No topics of interest found from the given list
 
@@ -127,7 +127,7 @@ Would you like to remove any tag?
         else:
             print('Unrecognised input.')
 
-    twenty_train = fetch_20newsgroups(subset='train', shuffle=True, random_state=42, remove=remove_tags,
+    twenty_train = fetch_20newsgroups(subset='all', shuffle=True, random_state=42, remove=remove_tags,
                                       categories=newsgroups_categories)
     plot_graph(twenty_train.data, twenty_train.target)  # We pass documents first, then all categories they belong to
 
@@ -138,6 +138,7 @@ def plot_graph(documents, categories):
     x_train_tfidf = TfidfTransformer().fit_transform(x_train_countvect)  # Since we need word frequencies instead of
     # word occurrences
     print('(N_samples, N_features): ', x_train_tfidf.shape, )
+    print(topic_count)
 
     dots, k_fold = plot_preparation()
 
