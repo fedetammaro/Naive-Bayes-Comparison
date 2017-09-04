@@ -16,7 +16,6 @@ import reuters_utilities
 # least frequent to the most frequent
 reuters_topics_list = [('corn', 10), ('wheat', 9), ('ship', 8), ('interest', 7), ('trade', 6), ('crude', 5),
                        ('grain', 4), ('money-fx', 3), ('acq', 2), ('earn', 1)]
-topic_count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 
 def get_documents_batch(documents_iterator, content, topic_list):
@@ -34,8 +33,6 @@ def get_documents_batch(documents_iterator, content, topic_list):
 def check_topics(doc, topic_list):  # Verifies if doc contains at least one of the chosen topics
     for topic in topic_list:
         if topic[0] in doc['topics']:
-            topic_index = topic[1] - 1
-            topic_count[topic_index] += 1
             return topic[1]  # Since it checks topics by order, it will return the first
     return False  # No topics of interest found from the given list
 
