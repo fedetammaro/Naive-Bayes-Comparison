@@ -25,9 +25,9 @@ def get_documents_batch(documents_iterator, content, topic_list):
     # of the above topic)
     if not len(data):  # In case there are no documents with the selected topics...
         return np.asarray([], dtype=int), np.asarray([], dtype=int)  # ...it returns an empty list
-    x_test, topics = zip(*data)  # Makes two list out of a list of tuples. x_test contains the documents and y contains
+    reuters_docs, topics = zip(*data)  # Makes two list out of a list of tuples. x_test contains the documents and y contains
     # the topic which they belong to
-    return x_test, np.asarray(topics, dtype=int)
+    return reuters_docs, np.asarray(topics, dtype=int)
 
 
 def check_topics(doc, topic_list):  # Verifies if doc contains at least one of the chosen topics
@@ -55,9 +55,9 @@ Which parts of the documents would you like to consider?
             print('Unrecognised input.')
 
     iterator = reuters_utilities.stream_reuters_documents()  # Iterator over parsed Reuters files
-    reuters_train, reuters_topics = get_documents_batch(iterator, content, reuters_topics_list)
+    reuters_docs, reuters_topics = get_documents_batch(iterator, content, reuters_topics_list)
 
-    plot_graph(reuters_train, reuters_topics)
+    plot_graph(reuters_docs, reuters_topics)
 
 
 def twenty_newsgroups():
@@ -124,27 +124,26 @@ Would you like to remove any tag?
         else:
             print('Unrecognised input.')
 
-    twenty_train = fetch_20newsgroups(subset='all', shuffle=True, random_state=42, remove=remove_tags,
+    twenty_docs = fetch_20newsgroups(subset='all', shuffle=True, random_state=42, remove=remove_tags,
                                       categories=newsgroups_categories)
-    plot_graph(twenty_train.data, twenty_train.target)  # We pass documents first, then all categories they belong to
+    plot_graph(twenty_docs.data, twenty_docs.target)  # We pass documents first, then all categories they belong to
 
 
 def plot_graph(documents, categories):
-    x_train_countvect = CountVectorizer().fit_transform(documents)  # Learns a vocabulary dictionary and returns a list
+    x_countvect = CountVectorizer(stop_words='english').fit_transform(documents)  # Learns a vocabulary dictionary and returns a list
     # of word occurrences
-    x_train_tfidf = TfidfTransformer().fit_transform(x_train_countvect)  # Since we need word frequencies instead of
+    x_tfidf = TfidfTransformer().fit_transform(x_countvect)  # Since we need word frequencies instead of
     # word occurrences
-    print('(N_samples, N_features): ', x_train_tfidf.shape, )
-    print(topic_count)
+    print('(N_samples, N_features): ', x_tfidf.shape)
 
     dots, k_fold = plot_preparation()
 
     start = time.time()
-    plot_curve(MultinomialNB(), 'Multinomial Naive Bayes', x_train_tfidf, categories, k_fold, dots)
+    plot_curve(MultinomialNB(), 'Multinomial Naive Bayes', x_tfidf, categories, k_fold, dots)
     print('Multinomial Naive Bayes execution time: ' + str(round(time.time() - start, 5)) + ' seconds.')
 
     start = time.time()
-    plot_curve(BernoulliNB(), 'Bernoulli Naive Bayes', x_train_tfidf, categories, k_fold, dots)
+    plot_curve(BernoulliNB(), 'Bernoulli Naive Bayes', x_tfidf, categories, k_fold, dots)
     print('Bernoulli Naive Bayes execution time: ' + str(round(time.time() - start, 5)) + ' seconds.')
 
     plt.show()
@@ -229,7 +228,7 @@ def plot_preparation():
             if k_fold == "" or k_fold < 2:
                 print('Invalid k-fold number specified. Setting it by default to 3.')
                 return dots, 3  # This must be done to avoid setting the k-fold value to an illegal value (it must be
-                # either None or >= 2
+                # either None or >= 2)
             break
         except ValueError:
             print('Please input a numerical value.')
