@@ -23,7 +23,7 @@ reuters_topics_list = [('corn', 10), ('wheat', 9), ('ship', 8), ('interest', 7),
                        ('grain', 4), ('money-fx', 3), ('acq', 2), ('earn', 1)]
 
 
-def filter_documents(documents_iterator, content, topic_list):
+def filter_documents(documents_iterator, content, selected_topics):
 
     """
     Cycles through the entire Reuters dataset to filter documents, returning only those who belong to one of the 10 most
@@ -37,17 +37,17 @@ def filter_documents(documents_iterator, content, topic_list):
     the corresponding category of each returned document
     """
 
-    reuters_docs = []
-    topics = []
-    for doc in itertools.islice(documents_iterator, 21578):
-        category = check_topics(doc, topic_list)
+    reuters_documents = []
+    reuters_topics = []
+    for document in itertools.islice(documents_iterator, 21578):
+        category = filter_topics(document, selected_topics)
         if category:
-            reuters_docs.append(content.format(**doc))
-            topics.append(category)
-    return reuters_docs, topics
+            reuters_documents.append(content.format(**document))
+            reuters_topics.append(category)
+    return reuters_documents, reuters_topics
 
 
-def check_topics(doc, topic_list):
+def filter_topics(document, selected_topics):
 
     """
     Checks if the selected document has at least one of the categories we want to retrieve.
@@ -58,8 +58,8 @@ def check_topics(doc, topic_list):
     Returns the ID of a category if the document has one of the desired categories, returns false otherwise
     """
 
-    for topic in topic_list:
-        if topic[0] in doc['topics']:
+    for topic in selected_topics:
+        if topic[0] in document['topics']:
             return topic[1]  # Since it checks topics by order, it will return the first
     return False  # No topics of interest found from the given list
 
@@ -87,9 +87,9 @@ Which parts of the documents would you like to consider?
             print('Unrecognised input.')
 
     iterator = reuters_utilities.stream_reuters_documents()  # Iterator over parsed Reuters files
-    reuters_docs, reuters_topics = filter_documents(iterator, content, reuters_topics_list)
+    reuters_documents, reuters_topics = filter_documents(iterator, content, reuters_topics_list)
 
-    plot_graph(reuters_docs, reuters_topics)
+    plot_graph(reuters_documents, reuters_topics)
 
 
 def twenty_newsgroups():
@@ -163,9 +163,9 @@ Would you like to remove any tag?
         else:
             print('Unrecognised input.')
 
-    twenty_docs = fetch_20newsgroups(subset='all', shuffle=True, random_state=42, remove=remove_tags,
-                                     categories=newsgroups_categories)
-    plot_graph(twenty_docs.data, twenty_docs.target)
+    newsgroups_documents = fetch_20newsgroups(subset='all', shuffle=True, random_state=42, remove=remove_tags,
+                                              categories=newsgroups_categories)
+    plot_graph(newsgroups_documents.data, newsgroups_documents.target)
 
 
 def plot_graph(documents, categories):
@@ -182,7 +182,8 @@ def plot_graph(documents, categories):
     # returns a list of word occurrences
     x_tfidf = TfidfTransformer().fit_transform(x_countvect)  # Since we need word frequencies instead of
     # word occurrences
-    print('(N_samples, N_features): ', x_tfidf.shape)
+    print('Number of documents: ' + str(x_tfidf.shape[0]))
+    print('Dictionary size: ' + str(x_tfidf.shape[1]) + '\n')
 
     dots, k_fold = plot_preparation()
 
@@ -220,7 +221,7 @@ def plot_curve(estimator, title, x_tfidf, categories, k_fold, dots):
     plt.xlabel('Number of training examples')
     plt.ylabel('Score')
 
-    train_sizes, train_scores, test_scores = learning_curve(estimator, x_tfidf, categories, cv=k_fold, n_jobs=2,
+    train_sizes, train_scores, test_scores = learning_curve(estimator, x_tfidf, categories, cv=k_fold, n_jobs=4,
                                                             train_sizes=np.linspace(0.1, 1.0, dots))
 
     train_scores_mean = np.mean(train_scores, axis=1)
