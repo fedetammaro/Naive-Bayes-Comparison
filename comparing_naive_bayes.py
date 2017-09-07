@@ -12,25 +12,52 @@ import time
 
 import reuters_utilities
 
-# Most frequent topics/IDs found on "Information Retrieval Technology" and from McCallum-Nigan paper, ordered from the
-# least frequent to the most frequent
+__author__ = 'Federico Tammaro'
+__email__ = 'federico.tammaro@stud.unifi.it'
+
+"""
+Most frequent topics/IDs found on "Information Retrieval Technology" and from McCallum-Nigam paper, ordered from the
+least frequent to the most frequent
+"""
 reuters_topics_list = [('corn', 10), ('wheat', 9), ('ship', 8), ('interest', 7), ('trade', 6), ('crude', 5),
                        ('grain', 4), ('money-fx', 3), ('acq', 2), ('earn', 1)]
 
 
-def get_documents_batch(documents_iterator, content, topic_list):
-    data = [(content.format(**doc), check_topics(doc, topic_list))  # Makes a list of tuples (document text, topic id)
-            for doc in itertools.islice(documents_iterator, 21578)  # Splits documents, returning the first 21578 items
-            if check_topics(doc, topic_list)]  # Removes documents with False (which do not belong to any
-    # of the above topic)
-    if not len(data):  # In case there are no documents with the selected topics...
-        return np.asarray([], dtype=int), np.asarray([], dtype=int)  # ...it returns an empty list
-    reuters_docs, topics = zip(*data)  # Makes two list out of a list of tuples. x_test contains the documents and y contains
-    # the topic which they belong to
-    return reuters_docs, np.asarray(topics, dtype=int)
+def filter_documents(documents_iterator, content, topic_list):
+
+    """
+    Cycles through the entire Reuters dataset to filter documents, returning only those who belong to one of the 10 most
+    used categories.
+
+    documents_iterator is the iterator of the dataset, used to cycle through all documents
+    content is the format of the content we would like to retrieve from all the documents (e.g. title and body)
+    topic_list is the list of categories we would like to retrieve
+
+    Returns two lists, one containing all the documents which have one of the selected categories, the other containing
+    the corresponding category of each returned document
+    """
+
+    reuters_docs = []
+    topics = []
+    for doc in itertools.islice(documents_iterator, 21578):
+        category = check_topics(doc, topic_list)
+        if category:
+            reuters_docs.append(content.format(**doc))
+            topics.append(category)
+    return reuters_docs, topics
 
 
-def check_topics(doc, topic_list):  # Verifies if doc contains at least one of the chosen topics
+def check_topics(doc, topic_list):
+
+    """
+    Checks if the selected document has at least one of the categories we want to retrieve.
+
+    doc is the current document
+    topic_list is the list of categories we would like to retrieve
+
+    Returns the ID of a category if the document has one of the desired categories, returns false otherwise
+    """
+
     for topic in topic_list:
         if topic[0] in doc['topics']:
             return topic[1]  # Since it checks topics by order, it will return the first
@@ -38,6 +65,11 @@ def check_topics(doc, topic_list):  # Verifies if doc contains at least one of t
 
 
 def reuters():
+
+    """
+    Asks which parts of the document we want to consider, then calls plot_graph passing documents and categories.
+    """
+
     while True:
         print("""
 Which parts of the documents would you like to consider?
@@ -55,12 +87,19 @@ Which parts of the documents would you like to consider?
             print('Unrecognised input.')
 
     iterator = reuters_utilities.stream_reuters_documents()  # Iterator over parsed Reuters files
-    reuters_docs, reuters_topics = get_documents_batch(iterator, content, reuters_topics_list)
+    reuters_docs, reuters_topics = filter_documents(iterator, content, reuters_topics_list)
 
     plot_graph(reuters_docs, reuters_topics)
 
 
 def twenty_newsgroups():
+
+    """
+    Asks which categories we want to retrieve the documents from and if we want any tag to be stripped away from the
+    documents. Then it fetches all the 20newsgroups document of the selected category/categories and it passes documents
+    and corresponding categories to the plot_graph function.
+    """
+
     while True:
         print("""
 Which document categories would you like to use?
@@ -125,13 +164,22 @@ Would you like to remove any tag?
             print('Unrecognised input.')
 
     twenty_docs = fetch_20newsgroups(subset='all', shuffle=True, random_state=42, remove=remove_tags,
-                                      categories=newsgroups_categories)
-    plot_graph(twenty_docs.data, twenty_docs.target)  # We pass documents first, then all categories they belong to
+                                     categories=newsgroups_categories)
+    plot_graph(twenty_docs.data, twenty_docs.target)
 
 
 def plot_graph(documents, categories):
-    x_countvect = CountVectorizer(stop_words='english').fit_transform(documents)  # Learns a vocabulary dictionary and returns a list
-    # of word occurrences
+
+    """
+    First, transforms the set of documents in a sparse matrix of occurrences, then makes a matrix of tfidf. Finally,
+    invokes plot_curve twice, each time with one of the two estimators, and shows the corresponding graphs.
+
+    documents contains the set of documents we are using to train and test each estimator
+    categories contains the corresponding categories of the documents we are using
+    """
+
+    x_countvect = CountVectorizer(stop_words='english').fit_transform(documents)  # Learns a vocabulary dictionary and
+    # returns a list of word occurrences
     x_tfidf = TfidfTransformer().fit_transform(x_countvect)  # Since we need word frequencies instead of
     # word occurrences
     print('(N_samples, N_features): ', x_tfidf.shape)
@@ -149,14 +197,30 @@ def plot_graph(documents, categories):
     plt.show()
 
 
-def plot_curve(estimator, title, X, y, k_fold, dots):
+def plot_curve(estimator, title, x_tfidf, categories, k_fold, dots):
+
+    """
+    Using learning_curve(), we get the results of the current estimator: the train sizes from 10% to 100% the size of
+    the dataset, train scores and test scores of the estimator; also, performs k-fold cross-validation to obtain those
+    values. Then, calculates mean and standard deviation of those values, used to plot the graph afterwards.
+
+    estimator is one between MultinomialNB and BernuolliNB, used to get the learning curve
+    title will be used as title of the graph
+    x_tfidf is the sparse matrix of tfidf values
+    categories contains the dataset categories corresponding to each document in the tfidf matrix
+    k_fold is the number of k-fold to perform in cross-validation
+    dots is the number of dots we want to show in our graph
+
+    The function returns a graph (plot)
+    """
+
     plt.figure()
     plt.title(title)
     plt.ylim(0.0, 1.0)
     plt.xlabel('Number of training examples')
     plt.ylabel('Score')
 
-    train_sizes, train_scores, test_scores = learning_curve(estimator, X, y, cv=k_fold, n_jobs=2,
+    train_sizes, train_scores, test_scores = learning_curve(estimator, x_tfidf, categories, cv=k_fold, n_jobs=2,
                                                             train_sizes=np.linspace(0.1, 1.0, dots))
 
     train_scores_mean = np.mean(train_scores, axis=1)
@@ -177,8 +241,7 @@ def plot_curve(estimator, title, X, y, k_fold, dots):
     plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std, alpha=0.1,
                      color='m')
 
-    plt.plot(train_sizes, train_scores_mean, '.-', color='g', label='Training score')  # Matplotlib method which plots
-    # lines to the axes.
+    plt.plot(train_sizes, train_scores_mean, '.-', color='g', label='Training score')
     plt.plot(train_sizes, test_scores_mean, '.-', color='m', label='Cross-validation score')
 
     plt.legend(loc='best')
@@ -186,6 +249,16 @@ def plot_curve(estimator, title, X, y, k_fold, dots):
 
 
 def print_results(estimator, score, deviation, train):
+
+    """
+    Prints scores and deviation on the console for better understanding of the results.
+
+    estimator indicates which estimator we're currently printing the results of
+    score is the list of scores returned by the learning_curve function
+    deviation is the list of standard deviation values we have for each score returned by learning_curve
+    train is a boolean indicating whether the score has been obtained in training (True) or testing (False)
+    """
+
     title = ''
 
     if type(estimator) is MultinomialNB:
@@ -210,6 +283,14 @@ def print_results(estimator, score, deviation, train):
 
 
 def plot_preparation():
+
+    """
+    Asks the user the number of dots he wants on the graph and the number of k-fold to use in the cross-validation
+    process.
+
+    The function returns the number of dots and the number of k-folds
+    """
+
     while True:  # Until the user gives a correct input...
         print('Please input the number of desired dots for the graph (at least 2): ')
         try:
